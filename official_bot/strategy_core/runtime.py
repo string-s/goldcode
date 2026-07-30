@@ -7,7 +7,7 @@ from pathlib import Path
 from storage import ProfileStore
 
 from .collision import time_to_collision
-from .config import StrategyConfig
+from .config import StrategyConfig, load_config_file, tunable_values
 from .controller import choose_control
 from .geometry import flatten_polygons, number, position
 from .memory import StrategyMemory, is_active, rabbit_id
@@ -24,16 +24,26 @@ class WolfStrategy:
         self.profile_mode = profile_mode or os.environ.get("WOLF_PROFILE_MODE", "auto")
         self.profile_store = None
         self.profile_write_enabled = False
+        self.base_config = self.config
+        self.active_config_path = None
+        self.active_overrides = {}
 
     def on_game_start(self, start_data, context=None):
         map_data = start_data.get("map") if isinstance(start_data, dict) else None
         self.memory.reset_match(self.config.default_attack, map_data, context)
-        self.memory.start_series_game(context, self.config)
         blocks = map_data.get("blocks") if isinstance(map_data, dict) else []
         borders = map_data.get("borders") if isinstance(map_data, dict) else []
         self.memory.obstacle_polygons = flatten_polygons(blocks) + flatten_polygons(borders)
         context = context if isinstance(context, dict) else {}
         runtime_dir = Path(context.get("runtimeDir") or "runtime")
+        self.active_config_path = Path(
+            os.environ.get("WOLF_ACTIVE_CONFIG")
+            or runtime_dir / "optimizer" / "active-config.json"
+        )
+        self.config, self.active_overrides = load_config_file(
+            self.active_config_path, self.base_config)
+        # Config-dependent series posture is calculated after loading overrides.
+        self.memory.start_series_game(context, self.config)
         database_path = Path(
             self.profile_db_path
             or os.environ.get("WOLF_PROFILE_DB")
@@ -157,6 +167,7 @@ class WolfStrategy:
                 "previousResults": list(self.memory.series_results),
                 "posture": self.memory.series_posture,
             },
+            "activeConfig": dict(self.active_overrides),
             "myEnergy": number(me.get("energy")),
             "myScore": int(number(me.get("score"))),
             "idleSeconds": round(max(0.0, elapsed - self.memory.last_contact_at), 3),
@@ -164,3 +175,10 @@ class WolfStrategy:
             "command": dict(command),
         }
         return command
+
+    def metadata(self):
+        return {
+            "activeConfigPath": str(self.active_config_path) if self.active_config_path else None,
+            "activeOverrides": dict(self.active_overrides),
+            "tunableConfig": tunable_values(self.config),
+        }

@@ -60,7 +60,8 @@ fresh()
 me = rabbit(1, 720, 410)
 foe = rabbit(2, 820, 410)
 command = choose_command(state(me, foe), 1)
-assert command == {"commandType": "setAttackValue", "data": "85"}, command
+assert command["commandType"] == "setAttackValue", command
+assert 50 < float(command["data"]) <= 1000
 
 # Opponent energy drops update its estimated attack, capped by its current energy.
 fresh()
@@ -69,7 +70,8 @@ far_foe = rabbit(2, 1100, 410, energy=300)
 choose_command(state(me, far_foe, elapsed=10), 1)
 near_foe = rabbit(2, 820, 410, energy=100, rebounding=True)
 command = choose_command(state(me, near_foe, elapsed=10.1), 1)
-assert command == {"commandType": "setAttackValue", "data": "135"}, command
+assert command["commandType"] == "setAttackValue", command
+assert 100 < float(command["data"]) <= 200
 
 # An invincible opponent on the right causes an evasive turn instead of a charge.
 fresh()

@@ -30,6 +30,11 @@ def get_diagnostics():
     return _strategy.diagnostics()
 
 
+def get_strategy_metadata():
+    """Return active config information for per-match metadata."""
+    return _strategy.metadata()
+
+
 def choose_command(game_state, bot_id):
     """Return exactly one legal command for the latest refresh frame."""
     return _strategy.choose_command(game_state, bot_id)

@@ -19,11 +19,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
-import strategy as participant_strategy
 import websockets
-from analysis import generate_match_report
-from tools.replay_recorder import ReplayRecorder
 from websockets.exceptions import ConnectionClosed
+
+import strategy as participant_strategy
+from analysis import generate_match_report
+from optimization import OptimizationManager
+from tools.replay_recorder import ReplayRecorder
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -211,6 +213,7 @@ class Bot:
         self.heartbeat_task = None
         self.room_retry_task = None
         self.battle_data_task = None
+        self.optimizer = OptimizationManager(BASE_DIR, RUNTIME_DIR)
 
     # ---- 基础设施 ----
 
@@ -296,6 +299,10 @@ class Bot:
             "gamesPerTable": assignment.get("gamesPerTable"),
             "strategyHash": STRATEGY_HASH,
             "strategyImplemented": STRATEGY_IMPLEMENTED is True,
+            "strategyRuntime": (
+                participant_strategy.get_strategy_metadata()
+                if hasattr(participant_strategy, "get_strategy_metadata") else {}
+            ),
         }
         write_json(capture.directory / "metadata.json", metadata)
         capture.replay_recorder = ReplayRecorder(
@@ -384,6 +391,19 @@ class Bot:
             except Exception as error:
                 self.log("MATCH_REPORT_ERROR", matchCode=capture.match_code,
                          message=str(error))
+                report_path = None
+            if capture.practice and report_path is not None:
+                try:
+                    timeout = float(os.environ.get("WOLF_OPTIMIZER_TOTAL_TIMEOUT_SECONDS", "60"))
+                    result = await asyncio.wait_for(
+                        asyncio.to_thread(self.optimizer.process_report, report_path),
+                        timeout=timeout,
+                    )
+                    self.log("OPTIMIZER_RESULT", matchCode=capture.match_code,
+                             status=result.get("status"), changes=result.get("changes"))
+                except Exception as error:
+                    self.log("OPTIMIZER_ERROR", matchCode=capture.match_code,
+                             message=str(error))
         if capture is not None and capture.practice:
             await self.send({"commandType": "readyForNextMatch"})
 

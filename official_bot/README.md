@@ -43,6 +43,7 @@ official_bot/
 
 - [Wolf 策略实现](docs/WOLF_STRATEGY.md)
 - [已确认的比赛约束](docs/COMPETITION_CONSTRAINTS.md)
+- [安全的赛间 LLM 优化](docs/OPTIMIZATION.md)
 - [官方 SDK README](docs/OFFICIAL_SDK_README.md)
 - [官方规则](docs/OFFICIAL_RULES.md)
 - [官方开发指南](docs/OFFICIAL_DEVELOPMENT_GUIDE.md)
@@ -71,3 +72,7 @@ python3 tools/replay_server.py
 
 画像模式可用 `WOLF_PROFILE_MODE=auto|read-write|read-only` 控制；比赛环境建议
 保持默认 `auto`。
+
+赛间优化器默认关闭。启用后也只允许调整白名单 JSON 参数，候选必须通过范围校验
+和完整测试才可发布；淘汰赛阶段会冻结。配置、provider 和回滚方式见
+`docs/OPTIMIZATION.md`。

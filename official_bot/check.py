@@ -17,6 +17,10 @@ SOURCES = [
     "analysis/match_report.py",
     "storage/__init__.py",
     "storage/profile_store.py",
+    "optimization/__init__.py",
+    "optimization/providers.py",
+    "optimization/manager.py",
+    "optimization/cli.py",
     "check.py",
     "tests/__init__.py",
     "tests/test_strategy.py",
@@ -27,6 +31,7 @@ SOURCES = [
     "tests/test_match_report.py",
     "tests/test_collision_navigation.py",
     "tests/test_profiles_series.py",
+    "tests/test_optimizer.py",
 ]
 SOURCES.extend(
     str(path.relative_to(BASE_DIR))
@@ -41,6 +46,7 @@ TESTS = [
     "tests/test_match_report.py",
     "tests/test_collision_navigation.py",
     "tests/test_profiles_series.py",
+    "tests/test_optimizer.py",
 ]
 
 

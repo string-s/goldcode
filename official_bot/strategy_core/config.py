@@ -1,11 +1,13 @@
-"""Central strategy parameters.
+"""Central strategy parameters and safe external override loading.
 
 The live strategy reads these values but never mutates them.  Keeping all
 thresholds in one dataclass makes later match-to-match optimisation safe: an
 LLM can propose a small config change without rewriting the control loop.
 """
 
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass, replace
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -65,3 +67,75 @@ class StrategyConfig:
     series_protect_average_points: float = 3.25
     series_aggressive_reserve: int = 100
     series_protect_gap: int = 1
+
+
+TUNABLE_RANGES = {
+    "attack_margin": (5, 180),
+    "reserve_energy": (0, 600),
+    "all_in_tail_seconds": (3.0, 12.0),
+    "idle_soft_seconds": (18.0, 27.0),
+    "idle_hard_seconds": (25.0, 29.5),
+    "protect_remaining_seconds": (10.0, 60.0),
+    "protect_lead": (0, 8),
+    "heart_race_ratio": (0.75, 1.25),
+    "heart_race_slack": (0.0, 160.0),
+    "invincible_threat_distance": (180.0, 700.0),
+    "target_hold_seconds": (0.2, 2.5),
+    "prediction_seconds": (0.1, 1.5),
+    "attack_prepare_distance": (80.0, 360.0),
+    "collision_cooldown_seconds": (1.2, 2.0),
+    "disengage_seconds": (0.4, 1.4),
+    "planner_step_distance": (8.0, 45.0),
+    "planner_turn_radians": (0.03, 0.22),
+    "planner_dynamic_margin": (5.0, 100.0),
+    "series_aggressive_reserve": (0, 300),
+    "series_protect_gap": (0, 5),
+}
+
+
+def tunable_values(config):
+    values = asdict(config)
+    return {key: values[key] for key in TUNABLE_RANGES}
+
+
+def validate_overrides(overrides, current=None, max_changes=4):
+    if not isinstance(overrides, dict):
+        raise ValueError("strategy overrides must be a JSON object")
+    if len(overrides) > max_changes:
+        raise ValueError(f"at most {max_changes} parameters may change at once")
+    current = current or {}
+    validated = {}
+    for key, value in overrides.items():
+        if key not in TUNABLE_RANGES:
+            raise ValueError(f"parameter is not tunable: {key}")
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"parameter must be numeric: {key}")
+        lower, upper = TUNABLE_RANGES[key]
+        if not lower <= value <= upper:
+            raise ValueError(f"parameter out of range: {key}={value}")
+        old = current.get(key)
+        if old not in (None, 0):
+            relative = abs(float(value) - float(old)) / abs(float(old))
+            if relative > 0.5:
+                raise ValueError(f"single-step change exceeds 50%: {key}")
+        validated[key] = value
+    return validated
+
+
+def apply_overrides(config, overrides):
+    validated = validate_overrides(overrides, tunable_values(config), max_changes=len(overrides))
+    field_types = {field: type(getattr(config, field)) for field in validated}
+    coerced = {
+        key: field_types[key](value)
+        for key, value in validated.items()
+    }
+    return replace(config, **coerced)
+
+
+def load_config_file(path, base=None):
+    base = base or StrategyConfig()
+    path = Path(path)
+    if not path.exists():
+        return base, {}
+    overrides = json.loads(path.read_text(encoding="utf-8"))
+    return apply_overrides(base, overrides), overrides
