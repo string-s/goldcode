@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from .geometry import number
+from .geometry import distance, number, position
 from .models import OpponentModel
 
 
@@ -34,6 +34,8 @@ class StrategyMemory:
     obstacle_polygons: list = field(default_factory=list)
     previous_rabbits: dict = field(default_factory=dict)
     opponent_models: dict = field(default_factory=dict)
+    last_contact_by_opponent: dict = field(default_factory=dict)
+    last_contact_target_id: str | None = None
 
     def reset_match(self, default_attack=50, map_data=None, context=None):
         self.requested_attack = default_attack
@@ -44,6 +46,8 @@ class StrategyMemory:
         self.last_elapsed = -1.0
         self.last_remaining = 180.0
         self.previous_rabbits = {}
+        self.last_contact_by_opponent = {}
+        self.last_contact_target_id = None
         self.map_data = map_data if isinstance(map_data, dict) else {}
         self.game_context = context if isinstance(context, dict) else {}
         self.obstacle_polygons = []
@@ -73,6 +77,19 @@ class StrategyMemory:
             rebound_started = bool(me.get("rebounding")) and not bool(previous_me.get("rebounding"))
             if energy_drop > 0 or abs(score_delta) == 1 or rebound_started:
                 self.last_contact_at = elapsed
+                me_position = position(me)
+                candidates = [
+                    rabbit for opponent_id, rabbit in current.items()
+                    if opponent_id != rabbit_id(me) and is_active(rabbit)
+                    and position(rabbit) is not None
+                ]
+                if me_position is not None and candidates:
+                    nearest = min(candidates, key=lambda rabbit: distance(
+                        me_position, position(rabbit)))
+                    if distance(me_position, position(nearest)) <= config.contact_identification_distance:
+                        target_id = rabbit_id(nearest)
+                        self.last_contact_target_id = target_id
+                        self.last_contact_by_opponent[target_id] = elapsed
 
         for opponent_id, rabbit in current.items():
             if me is not None and opponent_id == rabbit_id(me):
@@ -99,3 +116,11 @@ class StrategyMemory:
     def estimate_attack(self, rabbit, default_attack=50):
         model = self.model_for(rabbit_id(rabbit), default_attack)
         return model.attack_ema
+
+    def contact_age(self, opponent_id, elapsed):
+        contacted_at = self.last_contact_by_opponent.get(str(opponent_id))
+        return None if contacted_at is None else max(0.0, elapsed - contacted_at)
+
+    def on_collision_cooldown(self, opponent_id, elapsed, cooldown_seconds):
+        age = self.contact_age(opponent_id, elapsed)
+        return age is not None and age < cooldown_seconds

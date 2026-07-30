@@ -1,8 +1,8 @@
 """Translate a high-level intent into one legal persistent SDK command."""
 
-import math
-
-from .geometry import detour_target, distance, normalize_angle, number, position
+from .collision import time_to_collision
+from .geometry import distance, number, position
+from .navigation import choose_navigation_command
 
 
 def _command(command_type, data=None):
@@ -12,7 +12,7 @@ def _command(command_type, data=None):
     return value
 
 
-def choose_control(intent, me, memory, config):
+def choose_control(intent, me, foes, memory, config):
     if intent.stop:
         return _command("stop")
     me_position = position(me)
@@ -20,14 +20,6 @@ def choose_control(intent, me, memory, config):
         return _command("stop")
 
     raw_target = (intent.target_x, intent.target_y)
-    target = detour_target(
-        me_position,
-        raw_target,
-        memory.obstacle_polygons,
-        config.arena_width,
-        config.arena_height,
-        config.obstacle_margin,
-    )
     target_distance = distance(me_position, raw_target)
 
     # Some local fixtures omit moveState.  Treat an omitted value as already
@@ -37,26 +29,23 @@ def choose_control(intent, me, memory, config):
         return _command("goForward")
 
     desired_attack = intent.desired_attack
+    target_rabbit = next(
+        (foe for foe in foes if str(foe.get("id")) == str(intent.target_id)), None)
+    collision_steps = (
+        time_to_collision(me, target_rabbit, config.collision_body_scale)
+        if target_rabbit is not None else None
+    )
     attack_change = (
         desired_attack is not None
         and abs(int(desired_attack) - memory.requested_attack) >= config.attack_reissue_delta
     )
     if attack_change and (
-        target_distance <= config.attack_prepare_distance or intent.attack_urgent
+        target_distance <= config.attack_prepare_distance
+        or (collision_steps is not None and collision_steps <= config.collision_horizon_steps)
+        or intent.attack_urgent
     ):
         attack = max(0, min(1000, int(desired_attack)))
         memory.requested_attack = attack
         return _command("setAttackValue", attack)
 
-    desired_angle = math.atan2(target[1] - me_position[1], target[0] - me_position[0])
-    current_angle = number(me.get("angle"))
-    delta = normalize_angle(desired_angle - current_angle)
-    dir_state = int(number(me.get("dirState")))
-
-    if abs(delta) > config.turn_tolerance:
-        speed = config.hard_turn_speed if abs(delta) > config.hard_turn_tolerance else config.turn_speed
-        return _command("turnRight" if delta > 0 else "turnLeft", f"{speed:.3f}")
-
-    if dir_state != 0:
-        return _command("steerBack")
-    return _command("goForward")
+    return choose_navigation_command(intent, me, foes, memory, config)

@@ -2,6 +2,7 @@
 
 import copy
 
+from .collision import time_to_collision
 from .config import StrategyConfig
 from .controller import choose_control
 from .geometry import flatten_polygons, number, position
@@ -20,7 +21,8 @@ class WolfStrategy:
         map_data = start_data.get("map") if isinstance(start_data, dict) else None
         self.memory.reset_match(self.config.default_attack, map_data, context)
         blocks = map_data.get("blocks") if isinstance(map_data, dict) else []
-        self.memory.obstacle_polygons = flatten_polygons(blocks)
+        borders = map_data.get("borders") if isinstance(map_data, dict) else []
+        self.memory.obstacle_polygons = flatten_polygons(blocks) + flatten_polygons(borders)
 
     def on_game_end(self, settlement=None, battle_data=None):
         # Opponent models intentionally survive across games in this process.
@@ -76,11 +78,19 @@ class WolfStrategy:
             intent = Intent("SAFE", center_x, center_y, reason="no_active_opponents")
         else:
             intent = choose_intent(game_state, me, foes, self.memory, self.config)
-        command = choose_control(intent, me, self.memory, self.config)
+        command = choose_control(intent, me, foes, self.memory, self.config)
         target = next(
             (foe for foe in foes if rabbit_id(foe) == intent.target_id), None)
         elapsed = number(
             game_state.get("elapsedSeconds"), number(me.get("survivalTime"), 0.0))
+        predicted_collision = (
+            time_to_collision(me, target, self.config.collision_body_scale)
+            if target is not None else None
+        )
+        target_contact_age = (
+            self.memory.contact_age(intent.target_id, elapsed)
+            if intent.target_id is not None else None
+        )
         self.last_diagnostics = {
             "matchSerial": self.memory.match_serial,
             "elapsedSeconds": round(elapsed, 3),
@@ -94,6 +104,13 @@ class WolfStrategy:
                 round(self.memory.estimate_attack(target, self.config.default_attack), 3)
                 if target is not None else None
             ),
+            "predictedCollisionSteps": (
+                round(predicted_collision, 3) if predicted_collision is not None else None
+            ),
+            "targetContactAge": (
+                round(target_contact_age, 3) if target_contact_age is not None else None
+            ),
+            "rebounding": bool(me.get("rebounding")),
             "myEnergy": number(me.get("energy")),
             "myScore": int(number(me.get("score"))),
             "idleSeconds": round(max(0.0, elapsed - self.memory.last_contact_at), 3),

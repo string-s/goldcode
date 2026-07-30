@@ -42,6 +42,20 @@ class StrategyConfig:
     target_hold_seconds: float = 0.8
     prediction_seconds: float = 0.65
 
+    collision_cooldown_seconds: float = 1.5
+    disengage_seconds: float = 1.05
+    contact_identification_distance: float = 180.0
+    collision_horizon_steps: float = 18.0
+    collision_body_scale: float = 0.42
+
+    planner_steps: int = 12
+    planner_step_distance: float = 22.0
+    planner_turn_radians: float = 0.105
+    planner_dynamic_margin: float = 30.0
+    planner_edge_margin: float = 78.0
+    planner_collision_penalty: float = 1_000_000.0
+    planner_turn_switch_penalty: float = 35.0
+
     opponent_ema_alpha: float = 0.35
     opponent_min_sample: float = 5.0
     opponent_max_sample: float = 1000.0

@@ -77,7 +77,12 @@ def _flee_point(me_position, threats, config):
 def _farm_target(me, foes, memory, config, elapsed):
     me_position = position(me)
     held = next((foe for foe in foes if rabbit_id(foe) == memory.target_id), None)
-    if held is not None and elapsed - memory.target_selected_at < config.target_hold_seconds:
+    if (
+        held is not None
+        and elapsed - memory.target_selected_at < config.target_hold_seconds
+        and not memory.on_collision_cooldown(
+            rabbit_id(held), elapsed, config.collision_cooldown_seconds)
+    ):
         return held
 
     def target_cost(foe):
@@ -91,7 +96,12 @@ def _farm_target(me, foes, memory, config, elapsed):
             cost -= 180.0
         return cost
 
-    chosen = min(foes, key=target_cost)
+    available = [
+        foe for foe in foes
+        if not memory.on_collision_cooldown(
+            rabbit_id(foe), elapsed, config.collision_cooldown_seconds)
+    ]
+    chosen = min(available or foes, key=target_cost)
     memory.target_id = rabbit_id(chosen)
     memory.target_selected_at = elapsed
     return chosen
@@ -143,6 +153,22 @@ def choose_intent(game_state, me, foes, memory, config):
             "RAMPAGE", predicted[0], predicted[1], rabbit_id(target),
             reason="self_invincible",
         )
+
+    recent_target = None
+    for foe in foes:
+        age = memory.contact_age(rabbit_id(foe), elapsed)
+        if (
+            rabbit_id(foe) == memory.last_contact_target_id
+            and age is not None
+            and age < config.disengage_seconds
+        ):
+            recent_target = foe
+            break
+    if recent_target is not None:
+        target = _flee_point(me_position, [recent_target], config)
+        memory.mode = "DISENGAGE"
+        return Intent(
+            "DISENGAGE", target[0], target[1], reason="collision_cooldown_separation")
 
     carrot = valid_carrot(game_state.get("goldCarrot"))
     if carrot is not None:

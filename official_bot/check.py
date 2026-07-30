@@ -23,6 +23,7 @@ SOURCES = [
     "tests/test_replay_server.py",
     "tests/test_lifecycle.py",
     "tests/test_match_report.py",
+    "tests/test_collision_navigation.py",
 ]
 SOURCES.extend(
     str(path.relative_to(BASE_DIR))
@@ -35,6 +36,7 @@ TESTS = [
     "tests/test_replay_server.py",
     "tests/test_lifecycle.py",
     "tests/test_match_report.py",
+    "tests/test_collision_navigation.py",
 ]
 
 

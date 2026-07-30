@@ -39,6 +39,9 @@ strategy_core/memory.py
 strategy_core/geometry.py
   地图多边形解析、路径碰撞检测和保守绕行点
 
+strategy_core/navigation.py / collision.py
+  车辆局部轨迹采样、动态对手避让、碰撞时间预测与接触冷却
+
 analysis/match_report.py
   从帧、命令和结算生成结构化 JSON 与 Markdown 复盘报告
 ```
@@ -72,6 +75,7 @@ refreshData
 ## 当前边界
 
 - 障碍绕行采用保守包围盒拐点，还不是完整导航网格。
+- 轨迹规划已考虑车身半径、边界、静态多边形和非目标对手，但步长与转向模型仍需真实回放校准。
 - 碰撞事件通过能量、分数和回弹状态推断，真实训练后需要校准。
 - 对手模型当前只保存在进程内，重启后不会恢复。
 - `on_game_end` 必须快速且非阻塞；赛间 LLM 优化器尚未接入。
