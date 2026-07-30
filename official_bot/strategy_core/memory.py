@@ -36,6 +36,15 @@ class StrategyMemory:
     opponent_models: dict = field(default_factory=dict)
     last_contact_by_opponent: dict = field(default_factory=dict)
     last_contact_target_id: str | None = None
+    match_opponent_ids: set = field(default_factory=set)
+    opponent_names: dict = field(default_factory=dict)
+    profile_games: dict = field(default_factory=dict)
+    profile_contacts: dict = field(default_factory=dict)
+    series_points: int = 0
+    series_results: list = field(default_factory=list)
+    current_game_no: int | None = None
+    games_per_table: int | None = None
+    series_posture: str = "STEADY"
 
     def reset_match(self, default_attack=50, map_data=None, context=None):
         self.requested_attack = default_attack
@@ -48,10 +57,67 @@ class StrategyMemory:
         self.previous_rabbits = {}
         self.last_contact_by_opponent = {}
         self.last_contact_target_id = None
+        self.match_opponent_ids = set()
         self.map_data = map_data if isinstance(map_data, dict) else {}
         self.game_context = context if isinstance(context, dict) else {}
         self.obstacle_polygons = []
         self.match_serial += 1
+
+    def start_series_game(self, context, config):
+        context = context if isinstance(context, dict) else {}
+        game_no = int(number(context.get("gameNo"), 0)) or None
+        games_per_table = int(number(context.get("gamesPerTable"), 0)) or None
+        if game_no == 1 or (
+            game_no is not None and self.current_game_no is not None
+            and game_no <= self.current_game_no
+        ):
+            self.series_points = 0
+            self.series_results = []
+        self.current_game_no = game_no
+        self.games_per_table = games_per_table
+        played = len(self.series_results)
+        average = self.series_points / played if played else 0.0
+        if played and average >= config.series_protect_average_points:
+            self.series_posture = "PROTECT_SERIES"
+        elif played and average <= config.series_aggressive_average_points:
+            self.series_posture = "MUST_SCORE"
+        else:
+            self.series_posture = "STEADY"
+
+    def finish_series_game(self, rank, points, config):
+        if rank is None:
+            return
+        rank = int(rank)
+        if points is None and 1 <= rank <= len(config.series_points_by_rank):
+            points = config.series_points_by_rank[rank - 1]
+        points = int(points or 0)
+        self.series_results.append({"rank": rank, "points": points})
+        self.series_points += points
+
+    def load_profiles(self, profiles, default_attack=50):
+        for opponent_id, profile in profiles.items():
+            model = self.model_for(opponent_id, default_attack)
+            model.attack_ema = float(profile.get("attack_ema") or default_attack)
+            model.attack_peak = float(profile.get("attack_peak") or default_attack)
+            model.samples = int(profile.get("attack_samples") or 0)
+            self.profile_games[opponent_id] = int(profile.get("games") or 0)
+            self.profile_contacts[opponent_id] = int(profile.get("contacts") or 0)
+
+    def export_profiles(self):
+        rows = []
+        for opponent_id in sorted(self.match_opponent_ids):
+            model = self.model_for(opponent_id)
+            rows.append({
+                "opponent_id": opponent_id,
+                "name": self.opponent_names.get(opponent_id),
+                "games": self.profile_games.get(opponent_id, 0) + 1,
+                "attack_ema": model.attack_ema,
+                "attack_peak": model.attack_peak,
+                "attack_samples": model.samples,
+                "contacts": self.profile_contacts.get(opponent_id, 0)
+                + (1 if opponent_id in self.last_contact_by_opponent else 0),
+            })
+        return rows
 
     def model_for(self, opponent_id, default_attack=50.0):
         model = self.opponent_models.get(opponent_id)
@@ -94,6 +160,8 @@ class StrategyMemory:
         for opponent_id, rabbit in current.items():
             if me is not None and opponent_id == rabbit_id(me):
                 continue
+            self.match_opponent_ids.add(opponent_id)
+            self.opponent_names[opponent_id] = rabbit.get("name")
             previous = self.previous_rabbits.get(opponent_id)
             if previous is None or crossed_reset:
                 continue

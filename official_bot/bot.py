@@ -531,6 +531,7 @@ class Bot:
                 "gamesPerTable": assignment.get("gamesPerTable"),
                 "roomId": self.entered_room_id,
                 "botId": self.bot_id,
+                "runtimeDir": str(RUNTIME_DIR),
             })
             self.start_capture(message)
             self.log("GAME_STARTED",

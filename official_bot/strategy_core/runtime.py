@@ -1,6 +1,10 @@
 """Orchestrates observation, memory, policy and controller."""
 
 import copy
+import os
+from pathlib import Path
+
+from storage import ProfileStore
 
 from .collision import time_to_collision
 from .config import StrategyConfig
@@ -11,23 +15,58 @@ from .policy import choose_intent
 
 
 class WolfStrategy:
-    def __init__(self, config=None):
+    def __init__(self, config=None, profile_db_path=None, profile_mode=None):
         self.config = config or StrategyConfig()
         self.memory = StrategyMemory(requested_attack=self.config.default_attack)
         self.memory.reset_match(self.config.default_attack)
         self.last_diagnostics = {}
+        self.profile_db_path = profile_db_path
+        self.profile_mode = profile_mode or os.environ.get("WOLF_PROFILE_MODE", "auto")
+        self.profile_store = None
+        self.profile_write_enabled = False
 
     def on_game_start(self, start_data, context=None):
         map_data = start_data.get("map") if isinstance(start_data, dict) else None
         self.memory.reset_match(self.config.default_attack, map_data, context)
+        self.memory.start_series_game(context, self.config)
         blocks = map_data.get("blocks") if isinstance(map_data, dict) else []
         borders = map_data.get("borders") if isinstance(map_data, dict) else []
         self.memory.obstacle_polygons = flatten_polygons(blocks) + flatten_polygons(borders)
+        context = context if isinstance(context, dict) else {}
+        runtime_dir = Path(context.get("runtimeDir") or "runtime")
+        database_path = Path(
+            self.profile_db_path
+            or os.environ.get("WOLF_PROFILE_DB")
+            or runtime_dir / "wolf-profiles.sqlite3"
+        )
+        self.profile_store = ProfileStore(database_path)
+        bot_id = str(context.get("botId"))
+        rabbits = start_data.get("rabbits") if isinstance(start_data, dict) else []
+        opponent_ids = [
+            rabbit_id(rabbit) for rabbit in rabbits or []
+            if rabbit_id(rabbit).removeprefix("ai:") != bot_id
+        ]
+        self.memory.load_profiles(
+            self.profile_store.load_many(opponent_ids), self.config.default_attack)
+        match_type = context.get("matchType")
+        self.profile_write_enabled = (
+            self.profile_mode == "read-write"
+            or (self.profile_mode == "auto" and match_type == "PRACTICE")
+        )
 
     def on_game_end(self, settlement=None, battle_data=None):
-        # Opponent models intentionally survive across games in this process.
-        # Per-match navigation/contact state is reset by the next on_game_start.
-        return None
+        context = self.memory.game_context
+        bot_id = str(context.get("botId"))
+        result = settlement.get("result") if isinstance(settlement, dict) else None
+        rankings = result.get("ranking") if isinstance(result, dict) else None
+        row = next((
+            item for item in rankings or [] if str(item.get("botId")) == bot_id
+        ), {})
+        rank = row.get("rank") if row else (
+            settlement.get("resultRank") if isinstance(settlement, dict) else None)
+        self.memory.finish_series_game(rank, row.get("points") if row else None, self.config)
+        if self.profile_write_enabled and self.profile_store is not None:
+            self.profile_store.save_many(self.memory.export_profiles())
 
     def reset_for_test(self):
         self.memory.opponent_models.clear()
@@ -111,6 +150,13 @@ class WolfStrategy:
                 round(target_contact_age, 3) if target_contact_age is not None else None
             ),
             "rebounding": bool(me.get("rebounding")),
+            "series": {
+                "gameNo": self.memory.current_game_no,
+                "gamesPerTable": self.memory.games_per_table,
+                "pointsBeforeGame": self.memory.series_points,
+                "previousResults": list(self.memory.series_results),
+                "posture": self.memory.series_posture,
+            },
             "myEnergy": number(me.get("energy")),
             "myScore": int(number(me.get("score"))),
             "idleSeconds": round(max(0.0, elapsed - self.memory.last_contact_at), 3),

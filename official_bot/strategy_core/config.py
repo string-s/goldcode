@@ -59,3 +59,9 @@ class StrategyConfig:
     opponent_ema_alpha: float = 0.35
     opponent_min_sample: float = 5.0
     opponent_max_sample: float = 1000.0
+
+    series_points_by_rank: tuple = (4, 3, 2, 1)
+    series_aggressive_average_points: float = 2.25
+    series_protect_average_points: float = 3.25
+    series_aggressive_reserve: int = 100
+    series_protect_gap: int = 1

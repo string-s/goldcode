@@ -22,6 +22,7 @@ official_bot/
 ├── strategy.py            # 官方实时策略入口
 ├── strategy_core/         # Wolf 状态机、记忆、几何与单指令控制器
 ├── analysis/              # 自动赛后报告与后续优化入口
+├── storage/               # SQLite 稳定 ID 对手画像
 ├── tests/                 # 策略、生命周期和回放测试
 │   └── fixtures/          # 官方帧样例
 ├── tools/                 # 回放录制器、回放服务和页面
@@ -62,3 +63,11 @@ python3 tools/replay_server.py
 车辆控制器会对候选转向轨迹做短期采样，并结合车身安全半径、地图多边形、
 非目标对手和边界风险选择动作；碰撞后会主动脱离，并在约 1.5 秒冷却期间避免
 重复追撞同一目标。相关物理参数仍需使用真实自由赛回放校准。
+
+稳定对手 ID 的攻击画像保存在 `runtime/wolf-profiles.sqlite3`。数据库只在比赛
+开始和结算边界访问：自由赛默认读写，正式非自由赛默认只读。策略还会结合
+`gameNo/gamesPerTable`、此前局分和平均局分，在 `STEADY`、`MUST_SCORE` 与
+`PROTECT_SERIES` 三种系列赛姿态间切换。
+
+画像模式可用 `WOLF_PROFILE_MODE=auto|read-write|read-only` 控制；比赛环境建议
+保持默认 `auto`。

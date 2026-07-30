@@ -114,7 +114,10 @@ def _attack_for(target, me, memory, config, tail):
     estimated = memory.estimate_attack(target, config.default_attack)
     opponent_cap = _energy(target)
     expected = min(estimated, opponent_cap)
-    reserve = 0 if _score(me) <= config.danger_score else config.reserve_energy
+    if memory.series_posture == "MUST_SCORE":
+        reserve = config.series_aggressive_reserve
+    else:
+        reserve = 0 if _score(me) <= config.danger_score else config.reserve_energy
     affordable = max(0, my_energy - reserve)
     desired = min(affordable, expected + config.attack_margin)
     return int(max(0, desired))
@@ -208,10 +211,14 @@ def choose_intent(game_state, me, foes, memory, config):
             reason="low_score_safe_prey",
         )
 
+    protect_gap = (
+        config.series_protect_gap
+        if memory.series_posture == "PROTECT_SERIES" else config.protect_lead
+    )
     if (
         remaining <= config.protect_remaining_seconds
         and _rank(me, foes) <= 2
-        and _advancement_gap(me, foes) >= config.protect_lead
+        and _advancement_gap(me, foes) >= protect_gap
     ):
         target = _flee_point(me_position, foes, config)
         memory.mode = "PROTECT"
@@ -220,7 +227,11 @@ def choose_intent(game_state, me, foes, memory, config):
     target = _farm_target(me, foes, memory, config, elapsed)
     predicted = _predicted_position(target, config.prediction_seconds) or position(target)
     into_window = elapsed % 30.0
-    tail = into_window >= 30.0 - config.all_in_tail_seconds
+    tail_seconds = (
+        config.all_in_tail_seconds + 2.0
+        if memory.series_posture == "MUST_SCORE" else config.all_in_tail_seconds
+    )
+    tail = into_window >= 30.0 - tail_seconds
     desired = _attack_for(target, me, memory, config, tail)
     memory.mode = "FARM"
     return Intent(
