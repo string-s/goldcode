@@ -1,0 +1,49 @@
+{
+  "rabbits": [
+    {
+      "id": "1001",
+      "name": "我的战队",
+      "active": true,
+      "position": { "x": 720, "y": 410 },
+      "velocity": { "x": 0, "y": 0 },
+      "angle": 0,
+      "speed": 0,
+      "angularSpeed": 0,
+      "width": 70,
+      "height": 64,
+      "moveState": 0,
+      "dirState": 0,
+      "rebounding": false,
+      "reboundAngle": 0,
+      "attacking": false,
+      "invincible": false,
+      "energy": 1000,
+      "score": 10,
+      "deathCount": 0,
+      "survivalTime": 42
+    },
+    {
+      "id": "1002",
+      "name": "对手战队",
+      "active": true,
+      "position": { "x": 930, "y": 410 },
+      "velocity": { "x": -2, "y": 0 },
+      "angle": 3.141592653589793,
+      "speed": 2,
+      "angularSpeed": 0,
+      "width": 70,
+      "height": 64,
+      "moveState": 1,
+      "dirState": 0,
+      "rebounding": false,
+      "reboundAngle": 0,
+      "attacking": false,
+      "invincible": false,
+      "energy": 860,
+      "score": 12,
+      "deathCount": 0,
+      "survivalTime": 42
+    }
+  ],
+  "goldCarrot": { "x": 760, "y": 220 }
+}

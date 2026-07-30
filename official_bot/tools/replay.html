@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>疯狂 Geek 兔 · 本地回放</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-width: 1160px;
+      min-height: 100%;
+      margin: 0;
+      background: #10141d;
+      color: #dce6f2;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .replay-shell {
+      width: 1440px;
+      margin: 0 auto;
+    }
+
+    .replay-hint {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 44px;
+      padding: 8px 18px;
+      background: #171d29;
+      border-bottom: 1px solid #293246;
+      font-size: 13px;
+    }
+
+    .replay-hint strong {
+      color: #70e0a1;
+    }
+
+    #load-status {
+      color: #9baabe;
+    }
+
+    #load-status.error {
+      color: #ff8f8f;
+    }
+
+    #game-content {
+      width: 1440px;
+      height: 820px;
+      margin: 0 auto;
+      overflow: auto;
+    }
+  </style>
+  <script>
+    (function ensureReplayMode() {
+      var current = new URL(window.location.href);
+      var isLocalServer = current.protocol === 'http:' || current.protocol === 'https:';
+      var changed = false;
+      if (isLocalServer && current.pathname !== '/game' && current.pathname !== '/game/') {
+        current.pathname = '/game';
+        changed = true;
+      }
+      if (current.searchParams.get('mode') !== 'replay') {
+        current.searchParams.set('mode', 'replay');
+        changed = true;
+      }
+      if (!changed) {
+        return;
+      }
+      try {
+        window.history.replaceState(null, '', current.href);
+      } catch (error) {
+        window.location.replace(current.href);
+      }
+    })();
+  </script>
+</head>
+<body>
+  <main class="replay-shell">
+    <div class="replay-hint">
+      <span><strong>本地回放</strong> · 点击游戏内“选择文件”加载 replay.ccreplay.json，文件不会上传。</span>
+      <span id="load-status">正在加载前端资源…</span>
+    </div>
+    <div id="game-content"></div>
+  </main>
+
+  <script>
+    (function loadReplayClient() {
+      'use strict';
+
+      var CDN_ROOT = 'https://dev.g.alicdn.com/pengtianshun.pts/crazy-crash/0.0.1';
+      var CDN_BUNDLE = CDN_ROOT + '/project.bundle.js';
+      var PUBLIC_PATH_MARKER = 'i.p="/build/"';
+      var GAME_PATH_MARKER =
+        '"/game"===window.location.pathname||"/game/"===window.location.pathname';
+      var statusNode = document.getElementById('load-status');
+
+      function setStatus(message, isError) {
+        statusNode.textContent = message;
+        statusNode.className = isError ? 'error' : '';
+      }
+
+      function executeBundle(source) {
+        if (source.indexOf(PUBLIC_PATH_MARKER) === -1) {
+          throw new Error('CDN 前端包格式已变化，无法修正素材地址');
+        }
+        if (source.indexOf(GAME_PATH_MARKER) === -1) {
+          throw new Error('CDN 前端包格式已变化，无法启用本地回放路径');
+        }
+        var patchedSource = source.replace(
+          PUBLIC_PATH_MARKER,
+          'i.p="' + CDN_ROOT + '/"'
+        );
+        patchedSource = patchedSource.replace(GAME_PATH_MARKER, '!0');
+        var script = document.createElement('script');
+        script.textContent = patchedSource + '\n//# sourceURL=crazy-crash-project.bundle.js';
+        document.head.appendChild(script);
+        setStatus('前端资源已加载');
+      }
+
+      function loadForLocalFile() {
+        fetch(CDN_BUNDLE)
+          .then(function onResponse(response) {
+            if (!response.ok) {
+              throw new Error('HTTP ' + response.status);
+            }
+            return response.text();
+          })
+          .then(executeBundle)
+          .catch(function onError(error) {
+            setStatus('加载失败：' + error.message + '。请改用 npm run replay。', true);
+          });
+      }
+
+      function loadForLocalServer() {
+        var script = document.createElement('script');
+        script.src = CDN_BUNDLE;
+        script.onload = function onLoad() {
+          setStatus('前端资源已加载');
+        };
+        script.onerror = function onError() {
+          setStatus('CDN 前端资源加载失败，请检查网络后重试。', true);
+        };
+        document.head.appendChild(script);
+      }
+
+      if (window.location.protocol === 'file:') {
+        loadForLocalFile();
+      } else {
+        loadForLocalServer();
+      }
+    })();
+  </script>
+</body>
+</html>

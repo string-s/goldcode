@@ -5,6 +5,7 @@
 ## 目录结构
 ```
 firefly_forest/
+├── official_bot/           # 官方 Python SDK + Wolf 真实参赛实现
 ├── sim/
 │   ├── views.py            # 适配层协议：Observation/Action（策略层唯一依赖）
 │   └── engine.py           # 规则复刻模拟器（不确定项全部做成 SimConfig 开关）
@@ -27,6 +28,22 @@ python3 run_match.py --verbose    # 附完整事件日志
 python3 tournament.py             # 四预设互打 + 对抗典型对手池
 python3 tournament.py --sweep     # OFFSET/ALLIN_TAIL/RESERVE 网格扫描
 ```
+
+## 官方 Python BOT
+
+`official_bot/` 是当前真实参赛主线。它基于官方 Python starter，保留 SDK 的
+WebSocket、认证、分桌、重连、100ms 限频、数据录制和回放能力，并将原有高层
+状态机迁移为适配车辆控制与单命令约束的 Wolf 策略。
+
+```bash
+cd official_bot
+python3 -m pip install -r requirements.txt
+python3 check.py
+```
+
+实现结构、运行方式和当前限制见 `official_bot/docs/WOLF_STRATEGY.md`。原有 `sim/`、
+`agents/` 和 `tournament.py` 暂时保留为离线研究工具，其胜率不能代替官方环境
+中的真实训练结果。
 
 ## 本仓库自博弈实测结论（赛前先验，现场按侦察结果校准）
 1. **对抗普通对手池**（追击流/龟缩流/固定价——大多数队伍的真实水平）：
