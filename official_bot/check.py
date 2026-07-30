@@ -13,6 +13,8 @@ SOURCES = [
     "tools/replay_recorder.py",
     "tools/replay_server.py",
     "tools/__init__.py",
+    "analysis/__init__.py",
+    "analysis/match_report.py",
     "check.py",
     "tests/__init__.py",
     "tests/test_strategy.py",
@@ -20,6 +22,7 @@ SOURCES = [
     "tests/test_replay_recorder.py",
     "tests/test_replay_server.py",
     "tests/test_lifecycle.py",
+    "tests/test_match_report.py",
 ]
 SOURCES.extend(
     str(path.relative_to(BASE_DIR))
@@ -31,6 +34,7 @@ TESTS = [
     "tests/test_replay_recorder.py",
     "tests/test_replay_server.py",
     "tests/test_lifecycle.py",
+    "tests/test_match_report.py",
 ]
 
 

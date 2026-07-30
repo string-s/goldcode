@@ -1,5 +1,7 @@
 """Orchestrates observation, memory, policy and controller."""
 
+import copy
+
 from .config import StrategyConfig
 from .controller import choose_control
 from .geometry import flatten_polygons, number, position
@@ -12,6 +14,7 @@ class WolfStrategy:
         self.config = config or StrategyConfig()
         self.memory = StrategyMemory(requested_attack=self.config.default_attack)
         self.memory.reset_match(self.config.default_attack)
+        self.last_diagnostics = {}
 
     def on_game_start(self, start_data, context=None):
         map_data = start_data.get("map") if isinstance(start_data, dict) else None
@@ -27,6 +30,10 @@ class WolfStrategy:
     def reset_for_test(self):
         self.memory.opponent_models.clear()
         self.memory.reset_match(self.config.default_attack)
+        self.last_diagnostics = {}
+
+    def diagnostics(self):
+        return copy.deepcopy(self.last_diagnostics)
 
     def _find_me(self, rabbits, bot_id):
         expected = str(bot_id)
@@ -66,7 +73,31 @@ class WolfStrategy:
             center_x = self.config.arena_width / 2
             center_y = self.config.arena_height / 2
             from .models import Intent
-            intent = Intent("SAFE", center_x, center_y)
+            intent = Intent("SAFE", center_x, center_y, reason="no_active_opponents")
         else:
             intent = choose_intent(game_state, me, foes, self.memory, self.config)
-        return choose_control(intent, me, self.memory, self.config)
+        command = choose_control(intent, me, self.memory, self.config)
+        target = next(
+            (foe for foe in foes if rabbit_id(foe) == intent.target_id), None)
+        elapsed = number(
+            game_state.get("elapsedSeconds"), number(me.get("survivalTime"), 0.0))
+        self.last_diagnostics = {
+            "matchSerial": self.memory.match_serial,
+            "elapsedSeconds": round(elapsed, 3),
+            "mode": intent.mode,
+            "reason": intent.reason,
+            "targetId": intent.target_id,
+            "target": {"x": round(intent.target_x, 3), "y": round(intent.target_y, 3)},
+            "desiredAttack": intent.desired_attack,
+            "requestedAttack": self.memory.requested_attack,
+            "estimatedTargetAttack": (
+                round(self.memory.estimate_attack(target, self.config.default_attack), 3)
+                if target is not None else None
+            ),
+            "myEnergy": number(me.get("energy")),
+            "myScore": int(number(me.get("score"))),
+            "idleSeconds": round(max(0.0, elapsed - self.memory.last_contact_at), 3),
+            "obstacleCount": len(self.memory.obstacle_polygons),
+            "command": dict(command),
+        }
+        return command

@@ -124,7 +124,7 @@ def choose_intent(game_state, me, foes, memory, config):
     )
     if near_edge:
         memory.mode = "SAFE"
-        return Intent("SAFE", center[0], center[1])
+        return Intent("SAFE", center[0], center[1], reason="near_edge")
 
     invincible_foes = [
         foe for foe in foes
@@ -133,13 +133,16 @@ def choose_intent(game_state, me, foes, memory, config):
     if invincible_foes and not is_invincible(me):
         memory.mode = "EVADE"
         target = _flee_point(me_position, invincible_foes, config)
-        return Intent("EVADE", target[0], target[1])
+        return Intent("EVADE", target[0], target[1], reason="invincible_threat")
 
     if is_invincible(me):
         target = _nearest(me_position, [foe for foe in foes if not is_invincible(foe)] or foes)
         predicted = _predicted_position(target, config.prediction_seconds) or position(target)
         memory.mode = "RAMPAGE"
-        return Intent("RAMPAGE", predicted[0], predicted[1], rabbit_id(target))
+        return Intent(
+            "RAMPAGE", predicted[0], predicted[1], rabbit_id(target),
+            reason="self_invincible",
+        )
 
     carrot = valid_carrot(game_state.get("goldCarrot"))
     if carrot is not None:
@@ -147,7 +150,7 @@ def choose_intent(game_state, me, foes, memory, config):
         foe_distance = min((distance(position(foe), carrot) for foe in foes), default=1e9)
         if my_distance <= foe_distance * config.heart_race_ratio + config.heart_race_slack:
             memory.mode = "RACE"
-            return Intent("RACE", carrot[0], carrot[1])
+            return Intent("RACE", carrot[0], carrot[1], reason="heart_race_winnable")
 
     idle_seconds = max(0.0, elapsed - memory.last_contact_at)
     if idle_seconds >= config.idle_soft_seconds:
@@ -158,6 +161,7 @@ def choose_intent(game_state, me, foes, memory, config):
         return Intent(
             "CLOCK_RESET", predicted[0], predicted[1], rabbit_id(target), desired,
             attack_urgent=idle_seconds >= config.idle_hard_seconds,
+            reason="idle_deadline",
         )
 
     if _score(me) <= config.danger_score:
@@ -168,12 +172,15 @@ def choose_intent(game_state, me, foes, memory, config):
         if not vulnerable:
             target = _flee_point(me_position, foes, config)
             memory.mode = "SURVIVE"
-            return Intent("SURVIVE", target[0], target[1])
+            return Intent("SURVIVE", target[0], target[1], reason="low_score_no_safe_prey")
         target = min(vulnerable, key=lambda foe: distance(me_position, position(foe)))
         desired = min(int(_energy(me)), int(_energy(target) + config.attack_margin))
         predicted = _predicted_position(target, config.prediction_seconds) or position(target)
         memory.mode = "SURVIVE"
-        return Intent("SURVIVE", predicted[0], predicted[1], rabbit_id(target), desired)
+        return Intent(
+            "SURVIVE", predicted[0], predicted[1], rabbit_id(target), desired,
+            reason="low_score_safe_prey",
+        )
 
     if (
         remaining <= config.protect_remaining_seconds
@@ -182,7 +189,7 @@ def choose_intent(game_state, me, foes, memory, config):
     ):
         target = _flee_point(me_position, foes, config)
         memory.mode = "PROTECT"
-        return Intent("PROTECT", target[0], target[1])
+        return Intent("PROTECT", target[0], target[1], reason="top_two_score_cushion")
 
     target = _farm_target(me, foes, memory, config, elapsed)
     predicted = _predicted_position(target, config.prediction_seconds) or position(target)
@@ -193,4 +200,5 @@ def choose_intent(game_state, me, foes, memory, config):
     return Intent(
         "FARM", predicted[0], predicted[1], rabbit_id(target), desired,
         attack_urgent=tail,
+        reason="window_tail_all_in" if tail else "best_target_score",
     )

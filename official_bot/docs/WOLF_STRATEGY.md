@@ -38,6 +38,9 @@ strategy_core/memory.py
 
 strategy_core/geometry.py
   地图多边形解析、路径碰撞检测和保守绕行点
+
+analysis/match_report.py
+  从帧、命令和结算生成结构化 JSON 与 Markdown 复盘报告
 ```
 
 ## 与原始策略的关系
@@ -73,6 +76,7 @@ refreshData
 - 对手模型当前只保存在进程内，重启后不会恢复。
 - `on_game_end` 必须快速且非阻塞；赛间 LLM 优化器尚未接入。
 - 当前参数是官方规则先验，必须用自由赛数据继续调整。
+- `commands.jsonl` 已记录每次决策的模式、原因、目标和攻击估计，便于真实赛后定位。
 
 ## 已确认的比赛运行方式
 

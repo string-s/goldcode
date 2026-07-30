@@ -12,6 +12,7 @@ class Intent:
     desired_attack: int | None = None
     attack_urgent: bool = False
     stop: bool = False
+    reason: str = ""
 
 
 @dataclass

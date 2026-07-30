@@ -21,6 +21,7 @@ from urllib.parse import urlsplit
 
 import strategy as participant_strategy
 import websockets
+from analysis import generate_match_report
 from tools.replay_recorder import ReplayRecorder
 from websockets.exceptions import ConnectionClosed
 
@@ -375,6 +376,14 @@ class Bot:
         if capture is not None and not capture.strategy_finalized:
             capture.strategy_finalized = True
             self.call_strategy_hook("on_game_end", capture.settlement, capture.battle_data)
+        if capture is not None:
+            try:
+                report_path = generate_match_report(capture.directory)
+                self.log("MATCH_REPORT_SAVED", matchCode=capture.match_code,
+                         path=str(report_path))
+            except Exception as error:
+                self.log("MATCH_REPORT_ERROR", matchCode=capture.match_code,
+                         message=str(error))
         if capture is not None and capture.practice:
             await self.send({"commandType": "readyForNextMatch"})
 
@@ -552,8 +561,14 @@ class Bot:
                 self.last_command_at = now_ms()
                 self.command_count += 1
                 if capture is not None:
-                    capture.append("commands.jsonl",
-                                   {"sentAt": self.last_command_at, "command": command})
+                    capture.append("commands.jsonl", {
+                        "sentAt": self.last_command_at,
+                        "command": command,
+                        "decision": (
+                            participant_strategy.get_diagnostics()
+                            if hasattr(participant_strategy, "get_diagnostics") else {}
+                        ),
+                    })
 
         elif command_type == "closeGame":
             # 服务端在收到 closeGame 之前已经关闭房间，此后任何战斗指令都会被拒绝。

@@ -25,6 +25,11 @@ def reset_strategy_for_test():
     _strategy.reset_for_test()
 
 
+def get_diagnostics():
+    """Return a JSON-serialisable snapshot of the latest strategy decision."""
+    return _strategy.diagnostics()
+
+
 def choose_command(game_state, bot_id):
     """Return exactly one legal command for the latest refresh frame."""
     return _strategy.choose_command(game_state, bot_id)

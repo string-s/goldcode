@@ -21,6 +21,7 @@ official_bot/
 ├── bot.py                 # 官方 Agent 运行器；只增加策略生命周期钩子
 ├── strategy.py            # 官方实时策略入口
 ├── strategy_core/         # Wolf 状态机、记忆、几何与单指令控制器
+├── analysis/              # 自动赛后报告与后续优化入口
 ├── tests/                 # 策略、生命周期和回放测试
 │   └── fixtures/          # 官方帧样例
 ├── tools/                 # 回放录制器、回放服务和页面
@@ -50,3 +51,10 @@ official_bot/
 ```bash
 python3 tools/replay_server.py
 ```
+
+每局结算后会在对应的 `runtime/matches/<比赛>/` 中生成：
+
+- `match-report.json`：供程序和 LLM 使用的结构化指标；
+- `match-report.md`：便于人工快速阅读的复盘摘要。
+
+`commands.jsonl` 中除实际指令外，还会记录模式、目标、攻击估计和决策原因。
